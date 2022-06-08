@@ -1,0 +1,9 @@
+*.mtx
+*.slt
+matrix/olds/
+matrix/olds/base/
+gauss2.c
+build_matrixv1.py
+output
+a.out
+.vscode/
