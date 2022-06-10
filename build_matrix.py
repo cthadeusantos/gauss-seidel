@@ -18,7 +18,7 @@ for i in range(size):
             chute = uniform(0, 1)
             if chute >= .75:
                 continue
-            p = size / 2
+            p = int(size / 2)
             value = randint(1, p)
             if sum - value > 0:
                 sum = sum -value
