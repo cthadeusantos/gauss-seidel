@@ -7,3 +7,4 @@ build_matrixv1.py
 output
 *.out
 .vscode/
+unused_versions/
