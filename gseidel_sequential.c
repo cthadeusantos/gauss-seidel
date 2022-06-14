@@ -35,7 +35,7 @@ int main(int argc, char *argv[])
     filename = argv[2];
     
     tolerance = tolerance * pow(10, i);
-    printf("tolerance %i decimals, value %20.15Lf\n", i*(-1), tolerance);
+    // printf("tolerance %i decimals, value %20.15Lf\n", i*(-1), tolerance);
     
     infile=fopen(filename,"rt");
     if (NULL == infile){
@@ -44,7 +44,7 @@ int main(int argc, char *argv[])
     
     fscanf(infile,"%d",&nvar);    // Read matrix size
 
-    printf("Fill matrix and arrays!\n");
+    // printf("Fill matrix and arrays!\n");
 
     long double **matrix = calloc(nvar , sizeof(long double*)); 
     long double *vector = calloc(nvar , sizeof(long double));   // Declare an array to store independent set
@@ -57,7 +57,7 @@ int main(int argc, char *argv[])
         matrix[i] = calloc(nvar, sizeof(long double));
     }
 
-    printf("Reading matrix file!\n");
+    // printf("Reading matrix file!\n");
     int count = 0;
     long double element[3];
     while (fscanf(infile,"%Lf", &auxiliary) == 1)
@@ -113,10 +113,10 @@ int main(int argc, char *argv[])
 	// for(i = 0;i < nvar ; i++)
 	// 	printf("%30.30Lf %30.30Lf\n",solution[i], previous[i]);
     printf("Tempo de execucao: %lf milisegundos\n", ((double)t)/((CLOCKS_PER_SEC/1000))); //conversão para double
-    printf("Results saved at solution.slt file!\n");
-    for (i = 0; i < nvar; i = i + (int)(nvar / 10) + 1){
-        printf("X%i = %30.30Lf \n", i+1, solution[i]);
-    }
+    // printf("Results saved at solution.slt file!\n");
+    // for (i = 0; i < nvar; i = i + (int)(nvar / 10) + 1){
+    //     printf("X%i = %30.30Lf \n", i+1, solution[i]);
+    // }
     filename = "solution.slt";
     FILE *outfile = fopen(filename, "w");
     if (outfile == NULL){
