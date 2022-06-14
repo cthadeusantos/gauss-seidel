@@ -29,7 +29,9 @@ int main(int argc, char *argv[])
     }
 
     clock_t t; //variável para armazenar tempo
-
+    double start;
+    double end;
+    
 	long double tolerance=1, sum, auxiliary;
 
 	int i, j, flag, count, nvar = 0;
@@ -54,7 +56,7 @@ int main(int argc, char *argv[])
     // READ MATRIX FILE
     fscanf(infile,"%d",&nvar);    // Read matrix size
 
-    printf("Fill matrix and arrays!\n");
+    // printf("Fill matrix and arrays!\n");
 
     long double **matrix = calloc(nvar , sizeof(long double*)); 
     long double *vector = calloc(nvar , sizeof(long double));   // Declare an array to store independent set
@@ -67,7 +69,7 @@ int main(int argc, char *argv[])
         matrix[i] = calloc(nvar, sizeof(long double));
     }
 
-    printf("Reading matrix file!\n");
+    // printf("Reading matrix file!\n");
     count = 0;
     long double element[3];
     while (fscanf(infile,"%Lf", &auxiliary) == 1)
@@ -98,9 +100,9 @@ int main(int argc, char *argv[])
     // Gauss-seidel parallel method 
     printf("Waiting! Calculating!\n");
     
-    omp_set_num_threads(num_threads);
+    // omp_set_num_threads(num_threads);
 
-    t = clock();
+    start = omp_get_wtime();
     do {
         flag = 0;
         for (i = 0; i < nvar; i++){
@@ -123,13 +125,13 @@ int main(int argc, char *argv[])
         }
     } while(flag == 1);
 
-    t = clock() - t;
+    end = omp_get_wtime();
 
-    printf("Tempo de execucao: %lf milisegundos\n", ((double)t)/((CLOCKS_PER_SEC/1000))); //conversão para double
-    printf("Results saved at solution.slt file!\n");
-    for (i = 0; i < nvar; i = i + (int)(nvar / 10) + 1){
-        printf("X%i = %30.30Lf \n", i+1, solution[i]);
-    }
+    printf("Tempo de execucao: %lf milisegundos\n", ((double)(end - start))*1000); //conversão para double
+    // printf("Results saved at solution.slt file!\n");
+    // for (i = 0; i < nvar; i = i + (int)(nvar / 10) + 1){
+    //     printf("X%i = %30.30Lf \n", i+1, solution[i]);
+    // }
     filename = "solution.slt";
     FILE *outfile = fopen(filename, "w");
     if (outfile == NULL){
