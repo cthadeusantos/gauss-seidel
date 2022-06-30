@@ -29,7 +29,7 @@ int read_matrix(char *filename, long double *matrix, long double *vector){
 
         int count = 0;
         int block = 0;
-        int element[3];
+        long double element[3];
         while (fscanf(infile,"%Lf", &auxiliary) == 1) {
             element[count] = auxiliary;
             count++;
@@ -39,6 +39,7 @@ int read_matrix(char *filename, long double *matrix, long double *vector){
                 
                 if (col < dimension){
                     matrix[dimension * row + col] = element[2] ;
+                    // printf("elemento %Lf \n", element[2]);
                 } else {
                     vector[row] = element[2];
                 }

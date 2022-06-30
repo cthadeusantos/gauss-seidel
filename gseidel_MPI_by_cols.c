@@ -49,7 +49,7 @@ int main(int argc, char *argv[])
 
     clock_t t; //variável para armazenar tempo
 
-	long double tolerance = 1.000, sum, temp, auxiliary, global_delta;
+	long double tolerance = 1.000, sum=0, temp=0, global_delta=0;
     long double local_sum, delta_x, solucao;
 
     char *filename;
@@ -59,10 +59,13 @@ int main(int argc, char *argv[])
 
     int root=0, i_local=0, nlocal=0;
 
-    int dimension = 0, nline_submatrix=0, nelements_submatrix=0;
+    int dimension = 0, ncols_submatrix=0, nelements_submatrix=0;
     
+    /*
+     * DEFINE DIMENSIONS FROM FIRST LINE AT FILE
+     */
+
     if (rank == 0){
-        // printf("1. Preparando variáveis.\n");
         // Read command-line arguments
         i = (-1) * atoi(argv[1]);       
         filename = argv[2];
@@ -70,26 +73,28 @@ int main(int argc, char *argv[])
             if (atoi(argv[3]) == 1)
                 flag = atoi(argv[3]);
         tolerance = tolerance * pow(10, i);
-
         dimension = read_dimension(filename);
         
         // Set submatrix' size
-        nline_submatrix = (int)dimension / size;
+        ncols_submatrix = (int)dimension / size;
         // Adjusting if round it down
-        if (nline_submatrix * size < dimension) nline_submatrix++;
-        nelements_submatrix = nline_submatrix * dimension;
+        if (ncols_submatrix * size < dimension) ncols_submatrix++;
+        nelements_submatrix = ncols_submatrix * dimension;
     }
 
     MPI_Bcast( &dimension , 1 , MPI_INT , 0 , MPI_COMM_WORLD);
     MPI_Bcast( &tolerance , 1 , MPI_LONG_DOUBLE , 0 , MPI_COMM_WORLD);
     MPI_Barrier(MPI_COMM_WORLD);
     
-    nelements_submatrix = get_size_submatrix(rank, size, nline_submatrix, dimension);
-    nline_submatrix = get_num_lines_submtx(rank, size, dimension);
+    nelements_submatrix = get_size_submatrix(rank, size, ncols_submatrix, dimension);
+    ncols_submatrix = get_num_lines_submtx(rank, size, dimension);
 
-    long double *vector = calloc(nline_submatrix , sizeof(long double));
+    long double *vector = calloc(ncols_submatrix , sizeof(long double));
     long double *submatrix = calloc(nelements_submatrix, sizeof(long double));
-    long double *solution = calloc(nline_submatrix , sizeof(long double));
+    long double *solution = calloc(ncols_submatrix , sizeof(long double));
+
+    for(i=0;i<ncols_submatrix;i++)
+        solution[i]=0;
 
     if (rank == 0){
         printf("2.Montando matrizes, rank %i DIMENSAO %i!\n", rank, dimension);
@@ -97,15 +102,13 @@ int main(int argc, char *argv[])
         long double *matrix = calloc(dimension * dimension , sizeof(long double));
         long double *vector_aux = calloc(dimension, sizeof(long double));
 
+        // READ MATRIX & VECTOR FILE
         read_matrix(filename, matrix, vector_aux);
 
-        // printf("VETOR CONSTANTE LIDO\n");
-        // for(int hh=0; hh < dimension; hh++)
-        //     printf("indice %i {{%Lf}} ", hh, vector_aux[hh]);
+        // SPLIT MATRIX AND SEND TO PROCESSES
         int linha, coluna;
-        for (i = 0;i < size; i++){
+        for (i = 0;i < size; i++){ // SPLIT MATRIX
             offset = matrix_offset(i, size, dimension);
-
             long double *auxiliary = calloc(offset * dimension, sizeof(long double));
             int count = 0;
             int lower_limit, upper_limit;
@@ -121,13 +124,14 @@ int main(int argc, char *argv[])
                     count++;
                 }
             }
-            if (i != 0){
-                MPI_Isend(auxiliary, dimension * offset, MPI_LONG_DOUBLE, i, 3000, MPI_COMM_WORLD, &request);
+            if (i != 0){ // SEND SUBMATRIX AND VECTOR(PARCIALLY) TO RANKS
+                MPI_Isend(auxiliary, dimension * offset, MPI_LONG_DOUBLE, i, 4000+i, MPI_COMM_WORLD, &request);
                 int index = offset * i;
                 int nelements = get_num_lines_submtx(i, size, dimension);
-                MPI_Send(&vector_aux[index], nelements, MPI_LONG_DOUBLE, i, 3001, MPI_COMM_WORLD);
-            } else {
-                for (linha = 0; linha < nline_submatrix; linha++){
+                MPI_Send(&vector_aux[index], nelements, MPI_LONG_DOUBLE, i, 3000+i, MPI_COMM_WORLD);
+            } else {    // COPY VECTOR_AUX TO VECTOR (RANK 0)
+                int nelements = get_num_lines_submtx(i, size, dimension);
+                for (linha = 0; linha < nelements; linha++){
                     vector[linha] = vector_aux[linha];
                 }
             }
@@ -136,49 +140,53 @@ int main(int argc, char *argv[])
         free(vector_aux);
         free(matrix);
     } 
-    if (rank != 0){
-        MPI_Recv(submatrix, nelements_submatrix, MPI_LONG_DOUBLE, 0, 3000, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+    if (rank != 0){     // RECEIVE SUBMATRIX & VECTOR
+        MPI_Recv(submatrix, nelements_submatrix, MPI_LONG_DOUBLE, 0, 4000+rank, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         int nelements = get_num_lines_submtx(i, size, dimension);
-        MPI_Recv(&vector[0], nelements, MPI_LONG_DOUBLE, 0, 3001, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Recv(&vector[0], nelements, MPI_LONG_DOUBLE, 0, 3000+rank, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     }
     MPI_Barrier(MPI_COMM_WORLD);
     if (rank == 0){
         printf("****Waiting! Calculating! \n" );
     }
-    MPI_Barrier(MPI_COMM_WORLD);
-    
-    nlocal = matrix_offset(rank, size, dimension);
-    printf("Rank %i size %i offset %i\n", rank, size, nlocal);
+
+    nlocal = get_num_lines_submtx(rank, size, dimension);
     solucao=0.0;
     delta_x = 0.0;
     start = MPI_Wtime();
-    int iterations = 0;
-    int global_iter =0;
+    // int iterations = 0;
+    // int global_iter = 0;
+    long double global_delta_previous = 0;
     delta_x = 0.0;
+    
     do {
         delta_x = 0.0;
+        global_delta_previous = global_delta;
         for (i = 0; i < dimension; i++){
             local_sum = 0.0;
             for (j = 0; j < nlocal; j++){
-                if (j + rank * nlocal != i){
+                if (j + rank * nlocal != i){    // NON DIAGONAL ELEMENT
                     index_mtx = i * nlocal + j; // Indice da matriz
                     local_sum = local_sum + submatrix[index_mtx] * solution[j];
                 }
             }            
-            root = i / nlocal;      // Define submatrix number 
+            root = i / nlocal;      // Define rank que a submatrix pertence
             i_local = i % nlocal;   // Define column submatrix
             MPI_Reduce(&local_sum, &solution[i_local], 1, MPI_LONG_DOUBLE, MPI_SUM, root, MPI_COMM_WORLD);
-            if (rank == root){
+            
+            if (rank == root){      // DIAGONAL ELEMENT
+                i_local = i % nlocal;
                 index_mtx = i * nlocal + i_local; // Indice da matriz
                 solucao = (vector[i_local] - solution[i_local]) / submatrix[index_mtx];
                 delta_x = get_max(delta_x, fabsl(solution[i_local] - solucao));
                 solution[i_local] = solucao;
             }
         }
-        iterations++;
+        // iterations++;
         MPI_Allreduce(&delta_x , &global_delta, 1 , MPI_LONG_DOUBLE , MPI_MAX , MPI_COMM_WORLD);
-        MPI_Allreduce(&iterations , &global_iter, 1 , MPI_INT , MPI_MAX , MPI_COMM_WORLD);
-    } while (global_delta > tolerance && global_iter < 10000);
+        // MPI_Allreduce(&iterations , &global_iter, 1 , MPI_INT , MPI_MAX , MPI_COMM_WORLD);
+    } while (fabsl(global_delta  - global_delta_previous) > tolerance );
     
     end = MPI_Wtime();
     printf("time elapsed during the job: %.2f miliseconds.\n", (end - start) * 1000);
@@ -189,15 +197,15 @@ int main(int argc, char *argv[])
                 printf("X%i = %LF\n", i+1, solution[i]);
             }
         }
-        filename = "time.slt";
-        FILE *outfile = fopen(filename, "w");
+        filename = "results.log";
+        FILE *outfile = fopen(filename, "a");
         if (outfile == NULL){
             printf("Error opening file!\n");
-
             exit(1);
         }
         fprintf(outfile, "Matriz de tamanho %i Tolerance %50.50Lf \n", dimension,tolerance);
         fprintf(outfile, "Tempo de execucao: %lf milisegundos\n", (end - start) * 1000);
+        fprintf(outfile, "\n");
     }
     MPI_Finalize();
     free(submatrix);
