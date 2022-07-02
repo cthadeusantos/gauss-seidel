@@ -53,3 +53,8 @@ For sequential: ./sequential.out [precision] [filename]
 For OMP: ./omp.out [precision] [filename] [num_threads]
 
 For MPI: mpirun -np [num_process] ./mpi.out [precision] [filename]
+
+# DISCLAIMER:
+until MPI 0.1.0 version you only calculate matrix multiply processes numbers.
+
+e.g. 4 process, matrix 16, 20, 24, ...
