@@ -2,15 +2,28 @@
    Solution of a system of linear equations by Gauss-Seidel's
    iteration method. Assume that the coefficient matrix satisfies
    the condition of convergence.
- 
+    
+    Variables:
     nvar            dimension of the matrix
     num_thread      the number of threads will be used
     size_per_thread the number of elements calculates by thread
     tolerance       precision error
+    start           Start time
+    end             End time 
     matrix          matrix A (coefficient matrix)
     vector          matrix B (constant matrix)
     solution        matrix x (variable matrix)
     previous        matrix with previous values from solution matrix (initial values are zero)
+
+    OSX INSTRUCTIONS
+    To avoid message: "A system call failed during shared memory initialization that should
+    not have.  It is likely that your MPI job will now either abort or
+    experience performance degradation."
+
+    Please type "export TMPDIR=/tmp" (without quotes) at your terminal
+
+    LINUX INSTRUCTIONS
+    You must compile using -lm
 */
 
 #include<stdlib.h>
@@ -28,8 +41,8 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    clock_t t; //variável para armazenar tempo
-    double start;
+    clock_t t;      // Store time
+    double start;   //
     double end;
     
 	long double tolerance=1, sum, auxiliary;
@@ -52,13 +65,15 @@ int main(int argc, char *argv[])
         printf("file can't be opened \n");
     }
     
-
-    // READ MATRIX FILE
+    /*
+    * READ MATRIX DIMENSION
+    */
     fscanf(infile,"%d",&nvar);    // Read matrix size
 
-    // printf("Fill matrix and arrays!\n");
-
-    long double **matrix = calloc(nvar , sizeof(long double*)); 
+    /*
+    * Create matrix and vectors
+    */
+    long double **matrix = calloc(nvar , sizeof(long double*)); // Declare matrix A
     long double *vector = calloc(nvar , sizeof(long double));   // Declare an array to store independent set
     long double *previous = calloc(nvar , sizeof(long double)); // Declare an auxiliary array
     long double *solution = calloc(nvar , sizeof(long double)); // Declare an array to store variables' values
@@ -69,9 +84,12 @@ int main(int argc, char *argv[])
         matrix[i] = calloc(nvar, sizeof(long double));
     }
 
-    // printf("Reading matrix file!\n");
-    count = 0;
-    long double element[3];
+    count = 0;              // auxiliary counter
+    long double element[3]; // elements: row col value
+
+    /*
+    * READ MATRIX
+    */
     while (fscanf(infile,"%Lf", &auxiliary) == 1)
     {
         element[count] = auxiliary;
@@ -90,48 +108,43 @@ int main(int argc, char *argv[])
     }
     fclose(infile);
 
-
     // INITIALIZE MATRIXs
 	for(i = 0; i < nvar; i++){
-		previous[i]=0.0; //initialize
-        solution[i] = 0.0;
+		previous[i]=0.0;    //initialize
+        solution[i] = 0.0;  // initialize
     }
 
-    // Gauss-seidel parallel method 
-    printf("Waiting! Calculating!\n");
-    
-    // omp_set_num_threads(num_threads);
-
-    start = omp_get_wtime();
+    printf("Waiting! OMP calculating!\n");
+    /*
+     * Gauss-Seidel method
+     */
+    start = omp_get_wtime();    // Start time
     do {
-        flag = 0;
+        flag = 0;   // tolerance reached
         for (i = 0; i < nvar; i++){
-            // sum = vector[i];
             sum = 0;
             {
                 #pragma omp parallel for schedule(guided) num_threads(num_threads) shared(i, matrix, previous) reduction ( +: sum )
-                    for (j = 0; j < nvar; j++){
-                        if (j != i){
-                            sum = sum + matrix[i][j] * previous[j];
-                        }
+                for (j = 0; j < nvar; j++){
+                    if (j != i){    // Element is not diagonal
+                        sum = sum + matrix[i][j] * previous[j];
                     }
+                }
             }
             sum = vector[i] - sum;
-            solution[i] = sum / matrix[i][i];
+            solution[i] = sum / matrix[i][i];   // Calculate new solution like GS recommendation
             if (fabsl(solution[i] - previous[i])/solution[i] > tolerance){
-                flag = 1;
+                flag = 1;   // If any solution not reached tolerance
             }
             previous[i] = solution[i];
         }
     } while(flag == 1);
 
-    end = omp_get_wtime();
+    end = omp_get_wtime();  // End time
 
     printf("Tempo de execucao: %lf milisegundos\n", ((double)(end - start))*1000); //conversão para double
-    // printf("Results saved at solution.slt file!\n");
-    // for (i = 0; i < nvar; i = i + (int)(nvar / 10) + 1){
-    //     printf("X%i = %30.30Lf \n", i+1, solution[i]);
-    // }
+ 
+    // Output file
     filename = "solution.slt";
     FILE *outfile = fopen(filename, "w");
     if (outfile == NULL){
@@ -140,10 +153,6 @@ int main(int argc, char *argv[])
     }
     fprintf(outfile, "Matriz de tamanho %i Tolerance %50.50Lf \n", nvar,tolerance);
     fprintf(outfile, "Tempo de execucao: %lf milisegundos\n", ((double)t)/((CLOCKS_PER_SEC/1000)));
-    fprintf(outfile, "Solution values to checking:");
-    for (i = 0; i < nvar; i = i + (int)(nvar / 10) + 1){
-        fprintf(outfile, "X%i = %30.30Lf \n", i+1, solution[i]);
-    }
 
     fclose(outfile);
 

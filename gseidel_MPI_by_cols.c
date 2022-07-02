@@ -3,16 +3,29 @@
    iteration method. Assume that the coefficient matrix satisfies
    the condition of convergence.
 
-   INSTRUCAO PARA OSX
-Para evitar a msg:
-A system call failed during shared memory initialization that should
-not have.  It is likely that your MPI job will now either abort or
-experience performance degradation.
+    A.x = B
 
-digite export TMPDIR=/tmp no seu terminal
+    Variables:
+    nvar            dimension of the matrix
+    tolerance       precision error
+    matrix          matrix A (coefficient matrix)
+    vector          matrix B (constant matrix)
+    solution        matrix x (variable matrix)
+    flag            tolerance reached
 
-https://www.rookiehpc.com/mpi/docs/mpi_scatterv.php
-https://stackoverflow.com/questions/9269399/sending-blocks-of-2d-array-in-c-using-mpi/9271753#9271753
+    OSX INSTRUCTIONS
+    To avoid message: "A system call failed during shared memory initialization that should
+    not have.  It is likely that your MPI job will now either abort or
+    experience performance degradation."
+
+    Please type "export TMPDIR=/tmp" (without quotes) at your terminal
+
+    LINUX INSTRUCTIONS
+    You must compile using -lm
+
+    References:
+    https://www.rookiehpc.com/mpi/docs/mpi_scatterv.php
+    https://stackoverflow.com/questions/9269399/sending-blocks-of-2d-array-in-c-using-mpi/9271753#9271753
    */
 
 #include<stdlib.h>
@@ -25,11 +38,10 @@ https://stackoverflow.com/questions/9269399/sending-blocks-of-2d-array-in-c-usin
 #include "functools.h"
 #include "matrixtools.h"
 
-// #define max(a, b) ((a) > (b) ? (a) : (b))
+// #define max(a, b) ((a) > (b) ? (a) : (b)) // replace by get_max at functools.h
 
 int main(int argc, char *argv[])
 {
-    system("clear");
     MPI_Init(&argc, &argv);
     MPI_Status status;
     MPI_Request request;
@@ -38,8 +50,8 @@ int main(int argc, char *argv[])
     double start, end; // To compute running time
 
     int rank, size;
-    MPI_Comm_size (MPI_COMM_WORLD, &size);
-    MPI_Comm_rank (MPI_COMM_WORLD, &rank); 
+    MPI_Comm_size (MPI_COMM_WORLD, &size);  // running rank number
+    MPI_Comm_rank (MPI_COMM_WORLD, &rank);  // Processes quantity
 
     if (argc < 3){
         printf("Usage: output [num_decimals] [filename] [0-1]\n");
@@ -148,7 +160,7 @@ int main(int argc, char *argv[])
     }
     MPI_Barrier(MPI_COMM_WORLD);
     if (rank == 0){
-        printf("****Waiting! Calculating! \n" );
+        printf("****Waiting! MPI calculating! \n" );
     }
 
     nlocal = get_num_lines_submtx(rank, size, dimension);
@@ -189,9 +201,10 @@ int main(int argc, char *argv[])
     } while (fabsl(global_delta  - global_delta_previous) > tolerance );
     
     end = MPI_Wtime();
-    printf("time elapsed during the job: %.2f miliseconds.\n", (end - start) * 1000);
+    
 
     if (rank==0){
+        printf("time elapsed during the job: %.2f miliseconds.\n", (end - start) * 1000);
         if (flag==1){
             for(int i = 0; i < dimension; i++){
                 printf("X%i = %LF\n", i+1, solution[i]);
