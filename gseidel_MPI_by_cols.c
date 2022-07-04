@@ -36,7 +36,6 @@
 #include<time.h>
 #include<mpi.h>
 #include "functools.h"
-#include "matrixtools.h"
 
 // #define max(a, b) ((a) > (b) ? (a) : (b)) // replace by get_max at functools.h
 
@@ -97,17 +96,23 @@ int main(int argc, char *argv[])
     MPI_Bcast( &dimension , 1 , MPI_INT , 0 , MPI_COMM_WORLD);
     MPI_Bcast( &tolerance , 1 , MPI_LONG_DOUBLE , 0 , MPI_COMM_WORLD);
     MPI_Barrier(MPI_COMM_WORLD);
-    
+
+    // Define parameters to create submatrix and 
     nelements_submatrix = get_size_submatrix(rank, size, ncols_submatrix, dimension);
     ncols_submatrix = get_num_lines_submtx(rank, size, dimension);
 
+    /*
+    * Create submatrix and vectors for all processes
+    */
     long double *vector = calloc(ncols_submatrix , sizeof(long double));
     long double *submatrix = calloc(nelements_submatrix, sizeof(long double));
     long double *solution = calloc(ncols_submatrix , sizeof(long double));
 
+    // Init solution vector 
     for(i=0;i<ncols_submatrix;i++)
         solution[i]=0;
 
+    // READ MATRIX AND VECTOR PROCEDURE
     if (rank == 0){
         printf("2.Montando matrizes, rank %i DIMENSAO %i!\n", rank, dimension);
 
@@ -119,14 +124,17 @@ int main(int argc, char *argv[])
 
         // SPLIT MATRIX AND SEND TO PROCESSES
         int linha, coluna;
-        for (i = 0;i < size; i++){ // SPLIT MATRIX
+        for (i = 0;i < size; i++){ // SPLIT MATRIX IN COLUMNS
             offset = matrix_offset(i, size, dimension);
             long double *auxiliary = calloc(offset * dimension, sizeof(long double));
             int count = 0;
             int lower_limit, upper_limit;
-            for (linha=0; linha < dimension; linha++){
+
+            for (linha=0; linha < dimension; linha++){  // Process all lines
                 lower_limit=offset * i;
-                upper_limit=offset * ( i + 1);
+                upper_limit=offset * ( i + 1 );
+
+                // Process columns from submatrix limits right and left 
                 for (coluna=lower_limit; coluna < upper_limit; coluna++){
                     int index = linha * dimension + coluna;
                     if (i!=0)
@@ -158,7 +166,8 @@ int main(int argc, char *argv[])
         int nelements = get_num_lines_submtx(i, size, dimension);
         MPI_Recv(&vector[0], nelements, MPI_LONG_DOUBLE, 0, 3000+rank, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     }
-    MPI_Barrier(MPI_COMM_WORLD);
+    MPI_Barrier(MPI_COMM_WORLD); // Sync before start operation
+
     if (rank == 0){
         printf("****Waiting! MPI calculating! \n" );
     }
@@ -169,20 +178,23 @@ int main(int argc, char *argv[])
     start = MPI_Wtime();
     // int iterations = 0;
     // int global_iter = 0;
-    long double global_delta_previous = 0;
+    
+    long double global_delta_previous = 0;  
     delta_x = 0.0;
     
     do {
         delta_x = 0.0;
         global_delta_previous = global_delta;
-        for (i = 0; i < dimension; i++){
+        for (i = 0; i < dimension; i++){    // Process all lines
             local_sum = 0.0;
-            for (j = 0; j < nlocal; j++){
+            
+            for (j = 0; j < nlocal; j++){   // Process submatrix columns    
                 if (j + rank * nlocal != i){    // NON DIAGONAL ELEMENT
                     index_mtx = i * nlocal + j; // Indice da matriz
                     local_sum = local_sum + submatrix[index_mtx] * solution[j];
                 }
-            }            
+            }
+
             root = i / nlocal;      // Define rank que a submatrix pertence
             i_local = i % nlocal;   // Define column submatrix
             MPI_Reduce(&local_sum, &solution[i_local], 1, MPI_LONG_DOUBLE, MPI_SUM, root, MPI_COMM_WORLD);
@@ -198,10 +210,11 @@ int main(int argc, char *argv[])
         // iterations++;
         MPI_Allreduce(&delta_x , &global_delta, 1 , MPI_LONG_DOUBLE , MPI_MAX , MPI_COMM_WORLD);
         // MPI_Allreduce(&iterations , &global_iter, 1 , MPI_INT , MPI_MAX , MPI_COMM_WORLD);
-    } while (fabsl(global_delta  - global_delta_previous) > tolerance );
+    
+    // STOPPED CONDITION
+    } while (fabsl(global_delta - global_delta_previous) > tolerance );
     
     end = MPI_Wtime();
-    
 
     if (rank==0){
         printf("time elapsed during the job: %.2f miliseconds.\n", (end - start) * 1000);
